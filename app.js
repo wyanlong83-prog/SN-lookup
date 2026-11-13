@@ -6,6 +6,8 @@
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+  var STORAGE_KEY = 'snLookup.dataset.v1';
+
   var state = {
     records: [],
     columns: [],
@@ -14,7 +16,9 @@
     stream: null,
     rafId: 0,
     lastDecode: 0,
-    audioCtx: null
+    audioCtx: null,
+    zxingReader: null,
+    zxingHints: null
   };
 
   var COLOR_MAP = {
@@ -44,7 +48,58 @@
       ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
-  function loadData() {
+  function normalizeDataset(json) {
+    var records = Array.isArray(json && json.records) ? json.records : [];
+    var columns = Array.isArray(json && json.columns) && json.columns.length
+      ? json.columns
+      : Object.keys(records[0] || { SN: '' });
+    return {
+      generatedAt: json && json.generatedAt,
+      source: json && json.source,
+      columns: columns,
+      records: records
+    };
+  }
+
+  function readStoredDataset() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      var data = normalizeDataset(JSON.parse(raw));
+      return data.records.length ? data : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveDataset(data) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      throw new Error('本地存储空间不足，导入失败（数据量过大）');
+    }
+  }
+
+  function applyDataset(data, imported) {
+    state.records = data.records;
+    state.columns = data.columns;
+    state.bySn = new Map();
+    state.records.forEach(function (r) {
+      var sn = String(r.SN == null ? '' : r.SN).trim();
+      if (sn) state.bySn.set(sn.toUpperCase(), r);
+    });
+
+    var status = el('dataStatus');
+    var parts = ['共 ' + state.records.length + ' 条 SN'];
+    parts.push(imported ? '本地导入' : '内置数据');
+    var time = formatTime(data.generatedAt);
+    if (time) parts.push('更新于 ' + time);
+    status.textContent = parts.join(' · ');
+    status.classList.remove('error');
+    el('restoreBtn').hidden = !imported;
+  }
+
+  function loadBuiltin() {
     var status = el('dataStatus');
     return fetch('data.json?t=' + Date.now(), { cache: 'no-store' })
       .then(function (res) {
@@ -52,25 +107,23 @@
         return res.json();
       })
       .then(function (json) {
-        state.records = Array.isArray(json.records) ? json.records : [];
-        state.columns = Array.isArray(json.columns) && json.columns.length
-          ? json.columns
-          : Object.keys(state.records[0] || { SN: '' });
-        state.bySn = new Map();
-        state.records.forEach(function (r) {
-          var sn = String(r.SN == null ? '' : r.SN).trim();
-          if (sn) state.bySn.set(sn.toUpperCase(), r);
-        });
-        var time = formatTime(json.generatedAt);
-        status.textContent = '共 ' + state.records.length + ' 条 SN' +
-          (time ? ' · 数据更新于 ' + time : '');
-        status.classList.remove('error');
+        applyDataset(normalizeDataset(json), false);
       })
       .catch(function (err) {
         status.textContent = '数据载入失败：请确认 data.json 与网页在同一目录';
         status.classList.add('error');
+        el('restoreBtn').hidden = true;
         console.error(err);
       });
+  }
+
+  function loadData() {
+    var stored = readStoredDataset();
+    if (stored) {
+      applyDataset(stored, true);
+      return;
+    }
+    loadBuiltin();
   }
 
   function findRecord(raw) {
@@ -267,10 +320,45 @@
     el('scanActive').hidden = true;
   }
 
+  function decodeWithZXing(imgData, w, h) {
+    var Z = window.ZXing;
+    if (!Z) return null;
+    try {
+      if (!state.zxingReader) {
+        var hints = new Map();
+        hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [
+          Z.BarcodeFormat.QR_CODE,
+          Z.BarcodeFormat.DATA_MATRIX,
+          Z.BarcodeFormat.CODE_128,
+          Z.BarcodeFormat.CODE_39,
+          Z.BarcodeFormat.EAN_13,
+          Z.BarcodeFormat.EAN_8,
+          Z.BarcodeFormat.ITF,
+          Z.BarcodeFormat.CODABAR,
+          Z.BarcodeFormat.PDF_417
+        ]);
+        hints.set(Z.DecodeHintType.TRY_HARDER, true);
+        state.zxingReader = new Z.MultiFormatReader();
+        state.zxingHints = hints;
+      }
+      var gray = new Uint8ClampedArray(w * h);
+      var rgba = imgData.data;
+      for (var i = 0, j = 0; i < gray.length; i++, j += 4) {
+        gray[i] = (rgba[j] * 299 + rgba[j + 1] * 587 + rgba[j + 2] * 114) / 1000;
+      }
+      var source = new Z.RGBLuminanceSource(gray, w, h);
+      var bitmap = new Z.BinaryBitmap(new Z.HybridBinarizer(source));
+      var result = state.zxingReader.decode(bitmap, state.zxingHints);
+      return result ? result.getText() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function tick(ts) {
     if (!state.scanning) return;
 
-    if (ts - state.lastDecode >= 160 && video.readyState >= 2 && video.videoWidth) {
+    if (ts - state.lastDecode >= 180 && video.readyState >= 2 && video.videoWidth) {
       state.lastDecode = ts;
       var maxW = 640;
       var scale = Math.min(1, maxW / video.videoWidth);
@@ -282,17 +370,19 @@
         canvas.height = h;
       }
 
-      var code = null;
+      var text = null;
       try {
         ctx.drawImage(video, 0, 0, w, h);
         var img = ctx.getImageData(0, 0, w, h);
         if (typeof window.jsQR === 'function') {
-          code = window.jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' });
+          var qr = window.jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' });
+          if (qr && qr.data) text = String(qr.data);
         }
+        if (!text) text = decodeWithZXing(img, w, h);
       } catch (e) { /* 忽略单帧解码异常 */ }
 
-      if (code && code.data) {
-        onScan(String(code.data));
+      if (text) {
+        onScan(text);
         return;
       }
     }
@@ -318,6 +408,37 @@
     showResult(value);
   }
 
+  function setImportMsg(text, isError) {
+    var box = el('importMsg');
+    box.textContent = text;
+    box.hidden = !text;
+    box.classList.toggle('error', !!isError);
+  }
+
+  function handleCsvFile(file) {
+    if (!file) return;
+    Promise.resolve()
+      .then(function () { return file.arrayBuffer(); })
+      .then(function (buffer) {
+        var text = window.SNCsv.decodeBytes(buffer);
+        var data = window.SNCsv.buildDataset(text, file.name);
+        saveDataset(data);
+        applyDataset(data, true);
+        setImportMsg('已导入 ' + data.records.length + ' 条 SN（' + file.name + '）', false);
+      })
+      .catch(function (err) {
+        setImportMsg('导入失败：' + (err && err.message ? err.message : '未知错误'), true);
+      });
+  }
+
+  function restoreBuiltin() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) { /* 忽略 */ }
+    setImportMsg('已恢复为内置数据', false);
+    loadBuiltin();
+  }
+
   el('startBtn').addEventListener('click', startScan);
   el('stopBtn').addEventListener('click', stopScan);
 
@@ -334,6 +455,14 @@
   el('resultOverlay').addEventListener('click', function (e) {
     if (e.target === el('resultOverlay')) closeSheet(false);
   });
+
+  el('importBtn').addEventListener('click', function () { el('csvFile').click(); });
+  el('csvFile').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    handleCsvFile(file);
+    e.target.value = '';
+  });
+  el('restoreBtn').addEventListener('click', restoreBuiltin);
 
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && state.scanning) stopScan();

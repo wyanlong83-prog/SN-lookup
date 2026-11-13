@@ -399,3 +399,55 @@ header p.error {
     border-radius: 22px;
   }
 }
+
+/* ---------- 数据导入 ---------- */
+
+.import-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.import-head .btn {
+  flex: none;
+  font-size: 14px;
+  padding: 11px 16px;
+}
+
+.import-title {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.import-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.import-msg {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ok);
+  word-break: break-all;
+}
+
+.import-msg.error {
+  color: var(--miss);
+}
+
+.link-btn {
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+

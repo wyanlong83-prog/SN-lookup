@@ -33,7 +33,7 @@
           </svg>
         </div>
         <p class="scan-title">扫描产品二维码</p>
-        <p class="scan-sub">对准二维码，自动识别 SN 并查询</p>
+        <p class="scan-sub">支持二维码、DataMatrix、一维条码，识别 SN 后自动查询</p>
         <button id="startBtn" class="btn primary">开始扫描</button>
       </div>
 
@@ -56,6 +56,19 @@
         <button id="lookupBtn" class="btn secondary">查询</button>
       </div>
     </section>
+
+    <section class="card import-card">
+      <div class="import-head">
+        <div>
+          <p class="import-title">数据更新</p>
+          <p class="import-sub">导入 CSV（需含 SN 列）覆盖本机数据，仅保存在此设备</p>
+        </div>
+        <button id="importBtn" class="btn secondary">导入 CSV</button>
+      </div>
+      <input id="csvFile" type="file" accept=".csv,text/csv" hidden />
+      <p id="importMsg" class="import-msg" hidden></p>
+      <button id="restoreBtn" class="link-btn" hidden>恢复内置数据</button>
+    </section>
   </div>
 
   <div id="resultOverlay" class="overlay" hidden>
@@ -74,6 +87,8 @@
   </div>
 
   <script src="vendor/jsQR.js"></script>
+  <script src="vendor/zxing.min.js"></script>
+  <script src="csv-import.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
