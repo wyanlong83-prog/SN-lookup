@@ -1,5 +1,5 @@
 /* 修改页面或数据后，把 VERSION 加一，可让已安装的旧缓存自动失效 */
-var VERSION = 'v3';
+var VERSION = 'v4';
 var CACHE = 'sn-lookup-' + VERSION;
 
 var SHELL = [
@@ -45,11 +45,11 @@ self.addEventListener('fetch', function (event) {
   if (url.origin !== location.origin) return;
 
   var path = url.pathname;
-  var networkFirst = path.indexOf('data.json') !== -1 ||
-    path.slice(-1) === '/' ||
-    path.indexOf('index.html') !== -1;
+  /* 只有体积大且不常改的库走缓存优先，其余（HTML/JS/CSS/数据）一律网络优先，避免旧代码残留 */
+  var cacheFirst = path.indexOf('/vendor/') !== -1 ||
+    /\.(png|jpg|jpeg|svg|webp|ico)$/.test(path);
 
-  if (networkFirst) {
+  if (!cacheFirst) {
     event.respondWith(
       fetch(req)
         .then(function (res) {
