@@ -18,7 +18,8 @@
     lastDecode: 0,
     audioCtx: null,
     zxingReader: null,
-    zxingHints: null
+    zxingHints: null,
+    engine: null
   };
 
   var COLOR_MAP = {
@@ -268,6 +269,37 @@
     hideError();
     ensureAudio();
 
+    if (window.SNScandit && window.SNScandit.hasKey()) {
+      startScanditScan();
+      return;
+    }
+    startBuiltinScan();
+  }
+
+  function startScanditScan() {
+    var sdk = window.SNScandit;
+    state.scanning = true;
+    state.engine = 'scandit';
+    video.hidden = true;
+    el('scanditView').hidden = false;
+    el('scanIdle').hidden = true;
+    el('scanActive').hidden = false;
+
+    sdk.start({
+      container: el('scanditView'),
+      onScan: function (text) { onScan(text); }
+    }).catch(function (err) {
+      stopScan();
+      showError('Scandit 启动失败：' + (err && err.message ? err.message : '未知错误') + '。已切换为内置识别。');
+      startBuiltinScan();
+    });
+  }
+
+  function startBuiltinScan() {
+    hideError();
+    ensureAudio();
+    state.engine = 'builtin';
+
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showError('当前环境无法调用摄像头：请使用 iPhone Safari 并通过 HTTPS 打开本页面，或直接手动输入。');
       return;
@@ -306,7 +338,9 @@
   }
 
   function stopScan() {
+    var wasScandit = state.engine === 'scandit';
     state.scanning = false;
+    state.engine = null;
     if (state.rafId) {
       cancelAnimationFrame(state.rafId);
       state.rafId = 0;
@@ -316,8 +350,13 @@
       state.stream = null;
     }
     video.srcObject = null;
+    video.hidden = false;
+    el('scanditView').hidden = true;
     el('scanIdle').hidden = false;
     el('scanActive').hidden = true;
+    if (wasScandit && window.SNScandit) {
+      try { window.SNScandit.stop(); } catch (e) { /* 忽略 */ }
+    }
   }
 
   function decodeWithZXing(imgData, w, h) {
@@ -439,6 +478,28 @@
     loadBuiltin();
   }
 
+  function setEngineMsg(text, isError) {
+    var box = el('engineMsg');
+    box.textContent = text;
+    box.hidden = !text;
+    box.classList.toggle('error', !!isError);
+  }
+
+  function updateEngineStatus() {
+    var status = el('engineStatus');
+    status.classList.remove('error');
+    if (!window.SNScandit) {
+      status.textContent = '内置开源解码（Scandit 未加载）';
+      return;
+    }
+    if (window.SNScandit.hasKey()) {
+      status.textContent = 'Scandit 已启用 · 含激光点阵 DPM 模式';
+      el('licenseInput').value = window.SNScandit.getKey();
+    } else {
+      status.textContent = '未配置 Scandit license · 当前用内置解码';
+    }
+  }
+
   el('startBtn').addEventListener('click', startScan);
   el('stopBtn').addEventListener('click', stopScan);
 
@@ -456,13 +517,32 @@
     if (e.target === el('resultOverlay')) closeSheet(false);
   });
 
-  el('importBtn').addEventListener('click', function () { el('csvFile').click(); });
   el('csvFile').addEventListener('change', function (e) {
     var file = e.target.files && e.target.files[0];
     handleCsvFile(file);
     e.target.value = '';
   });
   el('restoreBtn').addEventListener('click', restoreBuiltin);
+
+  el('engineToggle').addEventListener('click', function () {
+    var form = el('engineForm');
+    form.hidden = !form.hidden;
+    if (!form.hidden) el('licenseInput').focus();
+  });
+
+  el('licenseSave').addEventListener('click', function () {
+    var key = el('licenseInput').value.trim();
+    if (!window.SNScandit) {
+      setEngineMsg('Scandit 组件未加载成功，请检查网络后重开页面。', true);
+      return;
+    }
+    window.SNScandit.setKey(key);
+    updateEngineStatus();
+    el('engineForm').hidden = true;
+    setEngineMsg(key ? '已保存，扫描将使用 Scandit 引擎。' : '已清除 license，恢复内置解码。', false);
+  });
+
+  window.addEventListener('snscanditready', updateEngineStatus);
 
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && state.scanning) stopScan();
@@ -474,5 +554,6 @@
     });
   }
 
+  updateEngineStatus();
   loadData();
 })();
