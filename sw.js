@@ -1,5 +1,5 @@
 /* 修改页面或数据后，把 VERSION 加一，可让已安装的旧缓存自动失效 */
-var VERSION = 'v2';
+var VERSION = 'v3';
 var CACHE = 'sn-lookup-' + VERSION;
 
 var SHELL = [
@@ -8,6 +8,7 @@ var SHELL = [
   './styles.css',
   './app.js',
   './csv-import.js',
+  './scandit-scan.js',
   './manifest.webmanifest',
   './vendor/jsQR.js',
   './vendor/zxing.min.js',
