@@ -415,6 +415,27 @@ header p.error {
   padding: 11px 16px;
 }
 
+.import-head label.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .import-title {
   margin: 0 0 3px;
   font-size: 15px;
@@ -449,5 +470,37 @@ header p.error {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* ---------- 扫码引擎 ---------- */
+
+.scandit-view {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #000;
+  overflow: hidden;
+}
+
+.key-input {
+  width: 100%;
+  height: 46px;
+  margin: 12px 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 15px;
+  color: var(--text);
+  background: #fbfdfe;
+}
+
+.key-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  background: #fff;
+}
+
+#engineForm .btn.primary {
+  margin-bottom: 10px;
 }
 
