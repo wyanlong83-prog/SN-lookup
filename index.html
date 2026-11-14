@@ -13,6 +13,14 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "@scandit/web-datacapture-core": "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-core@8/build/js/index.js",
+        "@scandit/web-datacapture-barcode": "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@8/build/js/index.js"
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="app">
@@ -33,12 +41,13 @@
           </svg>
         </div>
         <p class="scan-title">扫描产品二维码</p>
-        <p class="scan-sub">支持二维码、DataMatrix、一维条码，识别 SN 后自动查询</p>
+        <p class="scan-sub">支持激光点阵 DataMatrix、二维码、一维条码，识别 SN 后自动查询</p>
         <button id="startBtn" class="btn primary">开始扫描</button>
       </div>
 
       <div id="scanActive" class="scan-active" hidden>
         <video id="video" playsinline autoplay muted></video>
+        <div id="scanditView" class="scandit-view" hidden></div>
         <div class="scan-overlay" aria-hidden="true">
           <div class="scan-frame"><span class="scan-line"></span></div>
         </div>
@@ -63,11 +72,28 @@
           <p class="import-title">数据更新</p>
           <p class="import-sub">导入 CSV（需含 SN 列）覆盖本机数据，仅保存在此设备</p>
         </div>
-        <button id="importBtn" class="btn secondary">导入 CSV</button>
+        <label id="importBtn" class="btn secondary" for="csvFile">导入 CSV</label>
       </div>
-      <input id="csvFile" type="file" accept=".csv,text/csv" hidden />
+      <input id="csvFile" class="visually-hidden" type="file" accept=".csv,text/csv" />
       <p id="importMsg" class="import-msg" hidden></p>
       <button id="restoreBtn" class="link-btn" hidden>恢复内置数据</button>
+    </section>
+
+    <section class="card import-card">
+      <div class="import-head">
+        <div>
+          <p class="import-title">扫码引擎</p>
+          <p id="engineStatus" class="import-sub">检测中…</p>
+        </div>
+        <button id="engineToggle" class="btn secondary">设置</button>
+      </div>
+      <div id="engineForm" hidden>
+        <input id="licenseInput" class="key-input" type="text" autocomplete="off"
+               autocapitalize="off" spellcheck="false" placeholder="粘贴 Scandit license key" />
+        <button id="licenseSave" class="btn primary">保存并启用</button>
+        <p class="import-sub">未设置时会自动使用内置开源解码（激光点阵码可能识别不到）。</p>
+      </div>
+      <p id="engineMsg" class="import-msg" hidden></p>
     </section>
   </div>
 
@@ -90,5 +116,6 @@
   <script src="vendor/zxing.min.js"></script>
   <script src="csv-import.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="scandit-scan.js"></script>
 </body>
 </html>
